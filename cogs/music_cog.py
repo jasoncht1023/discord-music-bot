@@ -1,7 +1,8 @@
 import discord
 import asyncio
 from discord.ext import commands
-from youtube_dl import YoutubeDL
+from yt_dlp import YoutubeDL
+# ported to yt_dlp from youtube_dl
 
 class music_cog(commands.Cog):
     def __init__(self, bot):
@@ -10,7 +11,7 @@ class music_cog(commands.Cog):
         self.current_song = {}                              #stores the song currently playing in all servers
         self.music_queue = {}                               #stores the song queues of all servers
         self.server_status = {}                             #stores status flags of all servers, containing: queue_created, is_playing, is_looping
-        self.YDL_OPTIONS = {'format': 'bestaudio', 'youtube_include_dash_manifest': False}
+        self.YDL_OPTIONS = {'formats': 'bestaudio', 'youtube_include_dash_manifest': False}
         self.FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
     
     @commands.Cog.listener()
@@ -28,7 +29,10 @@ class music_cog(commands.Cog):
                 info = ydl.extract_info("ytsearch:{}".format(item), download=False)['entries'][0]
             except Exception:
                 return False
-        return {'source': info['formats'][0]['url'], 'title': info['title'], 'yt_url': info['webpage_url']}
+        for entry in reversed(info['formats']):
+            if (entry['vcodec'] == 'none'):
+                return {'source': entry['url'], 'title': info['title'], 'yt_url': info['webpage_url']}
+        return False
 
     def play_next(self, vc, server_id):                                                           #play the next song in the queue when the current song is finished
         if (self.server_status[server_id]["is_looping"] == True):                                 #play the current song when it is looping instead of the next song in the queue
@@ -61,7 +65,7 @@ class music_cog(commands.Cog):
     @commands.command()
     async def join(self, ctx):                                          #join the voice channel of the command sender
         server_id = ctx.message.guild.id
-        self.message_embed[server_id][server_id] = discord.Embed()
+        self.message_embed[server_id] = discord.Embed()
         if ctx.author.voice is None:
             self.message_embed[server_id].description = "You are not in a voice channel."
             await ctx.send(embed=self.message_embed[server_id])
@@ -75,25 +79,29 @@ class music_cog(commands.Cog):
     async def play(self, ctx, *args):                                                              #play song in the voice channel of the command sender
         query = " ".join(args)
         server_id = ctx.message.guild.id
+        voice_channel = None
         self.message_embed[server_id] = discord.Embed()
-        if (ctx.author.voice is not None):
-            voice_channel = ctx.author.voice.channel
+        if (self.server_status.get(server_id) == None):
+            self.server_status[server_id] = {"queue_created": False, "is_playing": False, "is_looping": False}
         if (ctx.author.voice is None):                                                             #join the command sender's voice channel or ask the sender to join one
             self.message_embed[server_id].description = "Connect to a voice channel to play music"
             await ctx.send(embed=self.message_embed[server_id])
         elif (ctx.voice_client is None):
             await ctx.author.voice.channel.connect()
+            voice_channel = ctx.voice_client.channel
+        elif (ctx.author.voice.channel == ctx.voice_client.channel):
+            voice_channel = ctx.voice_client.channel
         elif (self.server_status[server_id]["is_playing"] == True and ctx.author.voice.channel != ctx.voice_client.channel):
             self.message_embed[server_id].description = "You have to be in the same voice channel as the bot"
-            await ctx.send(embed=self.message_embed[server_id])
+            await ctx.send(embed=self.message_embed[server_id])            
         else:
-            await ctx.voice_client.move_to(ctx.author.voice.channel)    
-        if (self.server_status.get(server_id) == None):
-            self.server_status[server_id] = {"queue_created": False, "is_playing": False, "is_looping": False}
+            await ctx.voice_client.disconnect()
+            await ctx.author.voice.channel.connect()
+            voice_channel = ctx.author.voice.channel
         if (self.server_status[server_id]["queue_created"] == False):
             self.music_queue[server_id] = []
             self.server_status[server_id]["queue_created"] = True
-        if (ctx.author.voice is not None and voice_channel == ctx.voice_client.channel):            #add the song to the queue and start playing
+        if (ctx.author.voice is not None and ctx.author.voice.channel == voice_channel):           #add the song to the queue and start playing
             song = self.search_yt(query)
             if (type(song) == type(True)):
                 self.message_embed[server_id].description = "Could not download the song. Try another keyword"
@@ -108,11 +116,11 @@ class music_cog(commands.Cog):
 
     @commands.command()
     async def queue(self, ctx):                                                                                 #show the song queue
-        retval = ""
+        retval = "Song queue:\n"
         server_id = ctx.message.guild.id 
         for i in range(0, len(self.music_queue[server_id])):
             retval += f"{str(i+1)}. [{self.music_queue[server_id][i][0]['title']}]({self.music_queue[server_id][i][0]['yt_url']})\n"
-        if retval != "":
+        if retval != "Song queue:\n":
             self.message_embed[server_id].description = retval
         else:
             self.message_embed[server_id].description = "No song in the queue"
@@ -140,7 +148,8 @@ class music_cog(commands.Cog):
                 self.server_status[server_id]["is_looping"] = False
                 self.message_embed[server_id].description = "Loop is disabled"
                 await ctx.send(embed=self.message_embed[server_id])
-            self.message_embed[server_id].description = "Song skipped"            
+            self.message_embed[server_id].description = "Song skipped"   
+            self.server_status[server_id]["is_playing"] = False
             await ctx.send(embed=self.message_embed[server_id])
             ctx.voice_client.stop()
     
@@ -170,8 +179,8 @@ class music_cog(commands.Cog):
             self.message_embed[server_id].description = "Song resumed"
         await ctx.send(embed=self.message_embed[server_id])
     
-    @commands.command()                                             #loop the current song
-    async def loop(self, ctx):
+    @commands.command()                                             
+    async def loop(self, ctx):                                      #loop the current song
         server_id = ctx.message.guild.id
         self.message_embed[server_id] = discord.Embed()
         if (self.server_status[server_id]["is_looping"] == False):
@@ -203,9 +212,8 @@ class music_cog(commands.Cog):
     async def downloadhelp(self, ctx):                              #guide to download the audio file using the 'download' command
         server_id = ctx.message.guild.id
         self.message_embed[server_id] = discord.Embed()
-        self.message_embed[server_id].description = "Step 1: Type !download <song> to generate a hyperlink\nStep 2: Click the hyperlink and open the audio source in browser\nStep 3: Press Ctrl+S\nStep 4: Change the file extension to .mp3 and the file type to \"All Files\"\nStep 5: Click Save"
+        self.message_embed[server_id].description = "Steps to download audio:\nStep 1: Type !download <song> to generate a hyperlink\nStep 2: Click the hyperlink and open the audio source in browser\nStep 3: Press Ctrl+S\nStep 4: Change the file extension to .mp3 and the file type to \"All Files\"\nStep 5: Click Save"
         await ctx.send(embed=self.message_embed[server_id])
-
 
 async def setup(bot):
     await bot.add_cog(music_cog(bot))
