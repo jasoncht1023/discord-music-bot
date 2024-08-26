@@ -11,7 +11,7 @@ class music_cog(commands.Cog):
         self.current_song = {}                              #stores the song currently playing in all servers
         self.music_queue = {}                               #stores the song queues of all servers
         self.server_status = {}                             #stores status flags of all servers, containing: queue_created, is_playing, is_looping
-        self.YDL_OPTIONS = {'formats': 'bestaudio', 'youtube_include_dash_manifest': False}
+        self.YDL_OPTIONS = {'formats': 'bestaudio', 'youtube_include_dash_manifest': False, 'extractor_args': {'youtube': {'player_client': ['ios']}}}
         self.FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
     
     @commands.Cog.listener()
