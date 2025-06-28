@@ -80,6 +80,7 @@ class music_cog(commands.Cog):
     # play the next song in the queue when the current song is finished
     # play the current song when it is looping instead of the next song in the queue
     def play_next(self, vc, server_id):
+        self.last_action[server_id]["time"] = time.time()
         if (self.server_status[server_id]["is_looping"] == True):
             self.server_status[server_id]["is_playing"] = True
             m_url = self.current_song[server_id][0]['source']
@@ -251,10 +252,7 @@ class music_cog(commands.Cog):
     # disconnect the bot
     @commands.command()                                             
     async def disconnect(self, ctx):
-        server_id = ctx.message.guild.id
         if (ctx.voice_client is not None):
-            # self.server_status[server_id]["is_playing"] = False
-            # self.music_queue[server_id] = []
             ctx.voice_client.stop()
             await ctx.voice_client.disconnect()
 
