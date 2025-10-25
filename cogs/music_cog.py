@@ -29,7 +29,9 @@ class music_cog(commands.Cog):
     # disconnects the bot of the server for inactivity of 10 minutes
     async def timeout_check(self):
         while True:
-            for server_id in self.last_action:
+            for server_id in list(self.last_action.keys()):
+                if server_id not in self.last_action:
+                    continue
                 if (self.last_action[server_id]["time"] + 600 < time.time()):
                     if (server_id in self.server_status and self.server_status[server_id]["is_playing"] == True):
                         self.last_action[server_id]["time"] = time.time()
@@ -38,7 +40,9 @@ class music_cog(commands.Cog):
                         ctx = self.last_action[server_id]["ctx"]
                         self.message_embed[server_id].description = "Disconnected due to inactivity"
                         await ctx.send(embed=self.message_embed[server_id])  
-                        await voice_client.disconnect()
+                        if (voice_client is not None):
+                            voice_client.stop()
+                            await voice_client.disconnect()
             await asyncio.sleep(60) 
                 
     @commands.Cog.listener()
