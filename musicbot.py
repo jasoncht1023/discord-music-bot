@@ -12,6 +12,10 @@ with open("token.txt") as file:
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
 
+@bot.event
+async def on_error(event, *args):
+    print(f'Error in {event}: {args}')
+
 @bot.command()
 async def bothelp(ctx):
     message_embed = discord.Embed()
