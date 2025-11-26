@@ -13,14 +13,23 @@ class music_cog(commands.Cog):
         self.server_status = {}                             # stores status flags of all servers, containing: is_playing, is_looping
         self.last_action = {}                               # stores last action (play / join) time and ctx for all servers
         self.YDL_OPTIONS = {
-            'formats': 'bestaudio', 
-            'youtube_include_dash_manifest': False, 
-            'extractor_args': {'youtube': {'player_client': ['ios']}},
-            'cookies': '/yt_cookie.txt'
+            "format": "bestaudio/best",
+            "youtube_include_dash_manifest": False, 
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android_sdkless", "web_safari", "web"],
+                    "skip": ["dash", "hls"],
+                    "formats": "missing_pot"
+                }
+            },
+            "cookies": "/yt_cookie.txt",
+            "noplaylist": False,
+            "default_search": "auto",
+            "skip_download": True
         }
         self.FFMPEG_OPTIONS = {
-            'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 
-            'options': '-vn'
+            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5", 
+            "options": "-vn"
         }
 
         self.timeout_interval = self.bot.loop.create_task(self.timeout_check())
@@ -65,21 +74,23 @@ class music_cog(commands.Cog):
                     del self.last_action[server_id]
                 
     # search audio source from user input
-    def search_yt(self, item):                              
+    def search_yt(self, query):                              
         with YoutubeDL(self.YDL_OPTIONS) as ydl:
             try:
-                if (item.startswith("https://")):
-                    if (item.find("watch?v=") != -1):
-                        item = "https://www.youtube.com/" + item[item.rfind('/')+1:item.rfind('/')+20]
-                    else:
-                        item = "https://www.youtube.com/watch?v=" + item[item.rfind('/')+1:item.rfind('/')+12]
-                info = ydl.extract_info("ytsearch:{}".format(item), download=False)['entries'][0]
+                info = ydl.extract_info(query, download=False)
+                entries = info.get("entries", [info])
             except Exception:
-                return False
-        for entry in reversed(info['formats']):
-            if (entry['vcodec'] == 'none'):
-                return {'source': entry['url'], 'title': info['title'], 'yt_url': info['webpage_url']}
-        return False
+                return []
+        songs = []
+        for entry in entries:
+            if ((not entry) or (not entry.get('url'))):
+                continue
+            songs.append({
+                "source": entry["url"],
+                "title": entry["title"],
+                "yt_url": entry["webpage_url"]
+            })
+        return songs
 
     # play the next song in the queue when the current song is finished
     # play the current song when it is looping instead of the next song in the queue
@@ -156,16 +167,26 @@ class music_cog(commands.Cog):
         if (server_id not in self.music_queue):
             self.music_queue[server_id] = []
         if (ctx.author.voice is not None and ctx.author.voice.channel == voice_channel):           # add the song to the queue and start playing
-            song = self.search_yt(query)
-            if (type(song) == type(True)):
+            if any(x in query for x in ['youtube.com/playlist', '&list=', 'playlist?list=']):
+                self.message_embed[server_id].description = "Extracting playlist. Please wait..."
+                await ctx.send(embed=self.message_embed[server_id]) 
+            songs = self.search_yt(query)
+            if (len(songs) == 0):
                 self.message_embed[server_id].description = "Could not download the song. Try another keyword"
                 await ctx.send(embed=self.message_embed[server_id])
             else:
-                self.music_queue[server_id].append([song, voice_channel, ctx.channel])
-                if (self.server_status[server_id]["is_playing"] == True):
-                    self.message_embed[server_id].description = f"Song added to the queue: [{song['title']}]({song['yt_url']})"
-                    await ctx.send(embed=self.message_embed[server_id])  
-                else:
+                for song in songs:
+                    self.music_queue[server_id].append([song, voice_channel, ctx.channel])
+                if (len(songs) > 1 or (self.server_status[server_id]["is_playing"] == True and len(songs) == 1)):
+                    if (len(songs) == 1):
+                        self.message_embed[server_id].description = f"Added to the queue: [{songs[0]['title']}]({songs[0]['yt_url']})" 
+                    else:
+                        lines = [f"{i}. [{s['title']}]({s['yt_url']})" for i, s in enumerate(songs[:10], 1)]
+                        if (len(songs) > 10):
+                            lines.append(f"... and {len(songs) - 10} more")
+                        self.message_embed[server_id].description = f"Added {len(songs)} songs to the queue:\n" + "\n".join(lines)
+                    await ctx.send(embed=self.message_embed[server_id]) 
+                if (self.server_status[server_id]["is_playing"] == False):
                     await self.play_music(ctx.voice_client, server_id)
 
     # show the song queue
