@@ -139,9 +139,7 @@ class music_cog(commands.Cog):
         else:
             await ctx.voice_client.move_to(voice_channel)
 
-    # play song in the voice channel of the command sender
-    @commands.command()
-    async def play(self, ctx, *args):
+    async def add_songs(self, ctx, args, is_insert):
         query = " ".join(args)
         server_id = ctx.message.guild.id
         voice_channel = None
@@ -175,8 +173,15 @@ class music_cog(commands.Cog):
                 self.message_embed[server_id].description = "Could not download the song. Try another keyword"
                 await ctx.send(embed=self.message_embed[server_id])
             else:
-                for song in songs:
-                    self.music_queue[server_id].append([song, voice_channel, ctx.channel])
+                if (is_insert == False):                                                           # append songs at the end 
+                    for song in songs:
+                        self.music_queue[server_id].append([song, voice_channel, ctx.channel])
+                else:                                                                              # insert songs at the front
+                    new_music_queue = []
+                    for song in songs:
+                        new_music_queue.append([song, voice_channel, ctx.channel])
+                    new_music_queue.extend(self.music_queue[server_id])
+                    self.music_queue[server_id] = new_music_queue
                 if (len(songs) > 1 or (self.server_status[server_id]["is_playing"] == True and len(songs) == 1)):
                     if (len(songs) == 1):
                         self.message_embed[server_id].description = f"Added to the queue: [{songs[0]['title']}]({songs[0]['yt_url']})" 
@@ -188,6 +193,16 @@ class music_cog(commands.Cog):
                     await ctx.send(embed=self.message_embed[server_id]) 
                 if (self.server_status[server_id]["is_playing"] == False):
                     await self.play_music(ctx.voice_client, server_id)
+
+    # play song in the voice channel of the command sender, append at the end of the music queue
+    @commands.command()
+    async def play(self, ctx, *args):
+        await self.add_songs(ctx, args, is_insert=False)
+
+    # play song in the voice channel of the command sender, insert at the front of the music queue
+    @commands.command()
+    async def insert(self, ctx, *args):
+        await self.add_songs(ctx, args, is_insert=True)
 
     # show the song queue
     @commands.command()
