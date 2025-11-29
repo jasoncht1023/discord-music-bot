@@ -19,7 +19,7 @@ async def on_error(event, *args):
 @bot.command()
 async def bothelp(ctx):
     message_embed = discord.Embed()
-    message_embed.description = "Command list:\n!join\n!play <song name/url>\n!insert <song name/url>\n!queue\n!remove <queue number/all>\n!skip\n!pause\n!resume\n!loop\n!download <song>\n!downloadhelp"
+    message_embed.description = "Command list:\n!join\n!play <song name/url>\n!insert <song name/url>\n!queue\n!remove <queue number/all>\n!shuffle\n!skip\n!pause\n!resume\n!loop\n!download <song>\n!downloadhelp"
     await ctx.send(embed=message_embed)
 
 async def load():

@@ -4,7 +4,7 @@ A discord music bot to stream youtube audio in the discord servers. Host your ow
 
 ### Supported functions / commands:
 - Stream youtube audio in your servers
-	- !play, !join, !queue, !remove, !skip, !pause, !resume, !loop, !disconnect
+	- !play, !insert, !join, !queue, !remove, !shuffle, !skip, !pause, !resume, !loop, !disconnect
 - Download audio file from youtube
 	- !download, !downloadhelp
 

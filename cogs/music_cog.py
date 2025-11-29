@@ -3,11 +3,11 @@ import asyncio
 from discord.ext import commands
 from yt_dlp import YoutubeDL
 import time
+import random
 
 class music_cog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.message_embed = {}                             # temp variable for all servers for storing the next embeded message to be sent
         self.current_song = {}                              # stores the song currently playing in all servers
         self.music_queue = {}                               # stores the song queues of all servers
         self.server_status = {}                             # stores status flags of all servers, containing: is_playing, is_looping
@@ -47,8 +47,7 @@ class music_cog(commands.Cog):
                     else:
                         voice_client = self.bot.get_guild(server_id).voice_client
                         ctx = self.last_action[server_id]["ctx"]
-                        self.message_embed[server_id].description = "Disconnected due to inactivity"
-                        await ctx.send(embed=self.message_embed[server_id])  
+                        await ctx.send(embed=discord.Embed(description="Disconnected due to inactivity"))  
                         if (voice_client is not None):
                             voice_client.stop()
                             await voice_client.disconnect()
@@ -103,9 +102,8 @@ class music_cog(commands.Cog):
         elif (len(self.music_queue[server_id]) > 0):                                              # play the next song in the queue when queue is not empty
             self.server_status[server_id]["is_playing"] = True
             m_url = self.music_queue[server_id][0][0]['source']
-            self.message_embed[server_id] = discord.Embed()
-            self.message_embed[server_id].description = f"Now playing: [{self.music_queue[server_id][0][0]['title']}]({self.music_queue[server_id][0][0]['yt_url']})"
-            self.bot.loop.create_task(self.music_queue[server_id][0][2].send(embed=self.message_embed[server_id]))      # show the next song that is going to play
+            message = f"Now playing: [{self.music_queue[server_id][0][0]['title']}]({self.music_queue[server_id][0][0]['yt_url']})"
+            self.bot.loop.create_task(self.music_queue[server_id][0][2].send(embed=discord.Embed(description=message)))      # show the next song that is going to play
             self.current_song[server_id] = self.music_queue[server_id].pop(0)
             vc.play(discord.FFmpegPCMAudio(m_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next(vc, server_id))
         else:
@@ -116,9 +114,8 @@ class music_cog(commands.Cog):
         if (len(self.music_queue[server_id]) > 0):
             self.server_status[server_id]["is_playing"] = True
             m_url = self.music_queue[server_id][0][0]['source']
-            self.message_embed[server_id] = discord.Embed()
-            self.message_embed[server_id].description = f"Now playing: [{self.music_queue[server_id][0][0]['title']}]({self.music_queue[server_id][0][0]['yt_url']})"
-            await self.music_queue[server_id][0][2].send(embed=self.message_embed[server_id])       # show the next song that is going to play
+            message = f"Now playing: [{self.music_queue[server_id][0][0]['title']}]({self.music_queue[server_id][0][0]['yt_url']})"
+            await self.music_queue[server_id][0][2].send(embed=discord.Embed(description=message))       # show the next song that is going to play
             self.current_song[server_id] = self.music_queue[server_id].pop(0)
             vc.play(discord.FFmpegPCMAudio(m_url, **self.FFMPEG_OPTIONS), after=lambda e: self.play_next(vc, server_id)) # initiate to play the next song when the current song is finished
         else:
@@ -128,13 +125,11 @@ class music_cog(commands.Cog):
     @commands.command()
     async def join(self, ctx):                                          
         server_id = ctx.message.guild.id
-        self.message_embed[server_id] = discord.Embed()
         self.last_action[server_id] = { "time": time.time(), "ctx": ctx }
-        if ctx.author.voice is None:
-            self.message_embed[server_id].description = "You are not in a voice channel."
-            await ctx.send(embed=self.message_embed[server_id])
+        if (ctx.author.voice is None):
+            await ctx.send(embed=discord.Embed(description="You are not in a voice channel"))
         voice_channel = ctx.author.voice.channel
-        if ctx.voice_client is None:
+        if (ctx.voice_client is None):
             await voice_channel.connect()
         else:
             await ctx.voice_client.move_to(voice_channel)
@@ -143,21 +138,18 @@ class music_cog(commands.Cog):
         query = " ".join(args)
         server_id = ctx.message.guild.id
         voice_channel = None
-        self.message_embed[server_id] = discord.Embed()
         self.last_action[server_id] = { "time": time.time(), "ctx": ctx }
         if (self.server_status.get(server_id) == None):
             self.server_status[server_id] = { "is_playing": False, "is_looping": False }
         if (ctx.author.voice is None):                                                             # join the command sender's voice channel or ask the sender to join one
-            self.message_embed[server_id].description = "Connect to a voice channel to play music"
-            await ctx.send(embed=self.message_embed[server_id])
+            await ctx.send(embed=discord.Embed(description="Connect to a voice channel to play music"))
         elif (ctx.voice_client is None):
             await ctx.author.voice.channel.connect()
             voice_channel = ctx.voice_client.channel
         elif (ctx.author.voice.channel == ctx.voice_client.channel):
             voice_channel = ctx.voice_client.channel
         elif (self.server_status[server_id]["is_playing"] == True and ctx.author.voice.channel != ctx.voice_client.channel):
-            self.message_embed[server_id].description = "You have to be in the same voice channel as the bot"
-            await ctx.send(embed=self.message_embed[server_id])            
+            await ctx.send(embed=discord.Embed(description="You have to be in the same voice channel as the bot"))            
         else:
             await ctx.voice_client.disconnect()
             await ctx.author.voice.channel.connect()
@@ -166,12 +158,10 @@ class music_cog(commands.Cog):
             self.music_queue[server_id] = []
         if (ctx.author.voice is not None and ctx.author.voice.channel == voice_channel):           # add the song to the queue and start playing
             if any(x in query for x in ['youtube.com/playlist', '&list=', 'playlist?list=']):
-                self.message_embed[server_id].description = "Extracting playlist. Please wait..."
-                await ctx.send(embed=self.message_embed[server_id]) 
+                await ctx.send(embed=discord.Embed(description="Extracting playlist. Please wait...")) 
             songs = self.search_yt(query)
             if (len(songs) == 0):
-                self.message_embed[server_id].description = "Could not download the song. Try another keyword"
-                await ctx.send(embed=self.message_embed[server_id])
+                await ctx.send(embed=discord.Embed(description="Could not download the song. Try another keyword"))
             else:
                 if (is_insert == False):                                                           # append songs at the end 
                     for song in songs:
@@ -184,13 +174,13 @@ class music_cog(commands.Cog):
                     self.music_queue[server_id] = new_music_queue
                 if (len(songs) > 1 or (self.server_status[server_id]["is_playing"] == True and len(songs) == 1)):
                     if (len(songs) == 1):
-                        self.message_embed[server_id].description = f"Added to the queue: [{songs[0]['title']}]({songs[0]['yt_url']})" 
+                        message = f"Added to the queue: [{songs[0]['title']}]({songs[0]['yt_url']})" 
                     else:
                         lines = [f"{i}. [{s['title']}]({s['yt_url']})" for i, s in enumerate(songs[:10], 1)]
                         if (len(songs) > 10):
                             lines.append(f"... and {len(songs) - 10} more")
-                        self.message_embed[server_id].description = f"Added {len(songs)} songs to the queue:\n" + "\n".join(lines)
-                    await ctx.send(embed=self.message_embed[server_id]) 
+                        message = f"Added {len(songs)} songs to the queue:\n" + "\n".join(lines)
+                    await ctx.send(embed=discord.Embed(description=message)) 
                 if (self.server_status[server_id]["is_playing"] == False):
                     await self.play_music(ctx.voice_client, server_id)
 
@@ -210,84 +200,87 @@ class music_cog(commands.Cog):
         retval = "Song queue:\n"
         server_id = ctx.message.guild.id
         if (server_id not in self.music_queue):
-             self.message_embed[server_id].description = "No song in the queue"
+            message = "No song in the queue"
         else:
             for i in range(0, len(self.music_queue[server_id])):
                 retval += f"{str(i+1)}. [{self.music_queue[server_id][i][0]['title']}]({self.music_queue[server_id][i][0]['yt_url']})\n"
             if retval != "Song queue:\n":
-                self.message_embed[server_id].description = retval
+                message = retval
             else:
-                self.message_embed[server_id].description = "No song in the queue"
-        await ctx.send(embed=self.message_embed[server_id])
+                message = "No song in the queue"
+        await ctx.send(embed=discord.Embed(description=message))
 
     # remove songs in the song queue
     @commands.command()                                                                                 
     async def remove(self, ctx, q_num):
         server_id = ctx.message.guild.id
         if (q_num == 'all'):                                                                                    # remove all the songs
-            self.message_embed[server_id].description = "All queued songs have been remove"
+            message = "All queued songs have been remove"
             self.music_queue[server_id] = []    
         elif (q_num.isdigit() == False or int(q_num) < 1 or int(q_num) > (len(self.music_queue[server_id]))):   # report for wrong input
-            self.message_embed[server_id].description = "Please enter a correct queue number"
+            message = "Please enter a correct queue number"
         else:
-            self.message_embed[server_id].description = f"Song removed: [{self.music_queue[server_id][int(q_num)-1][0]['title']}]({self.music_queue[server_id][int(q_num)-1][0]['yt_url']})"           
+            message = f"Song removed: [{self.music_queue[server_id][int(q_num)-1][0]['title']}]({self.music_queue[server_id][int(q_num)-1][0]['yt_url']})"           
             self.music_queue[server_id].pop(int(q_num)-1)                                                       # remove a specific song
-        await ctx.send(embed=self.message_embed[server_id])   
+        await ctx.send(embed=discord.Embed(description=message))   
+
+    # shuffle the song queue
+    @commands.command()
+    async def shuffle(self, ctx):
+        server_id = ctx.message.guild.id
+        if (not self.music_queue.get(server_id) or len(self.music_queue[server_id]) < 2):
+            return await ctx.send(embed=discord.Embed(description="Not enough songs in queue to shuffle"))
+        random.shuffle(self.music_queue[server_id])
+        await ctx.send(embed=discord.Embed(description="Queue shuffled"))
     
     # skip the current song and initiate to play the next song
     @commands.command()
     async def skip(self, ctx):
         server_id = ctx.message.guild.id
-        self.message_embed[server_id] = discord.Embed()
         if (ctx.voice_client != None):
             if (self.server_status[server_id]["is_looping"] == True):
                 self.server_status[server_id]["is_looping"] = False
-                self.message_embed[server_id].description = "Loop is disabled"
-                await ctx.send(embed=self.message_embed[server_id])
-            self.message_embed[server_id].description = "Song skipped"   
+                await ctx.send(embed=discord.Embed(description="Loop is disabled")) 
             self.server_status[server_id]["is_playing"] = False
-            await ctx.send(embed=self.message_embed[server_id])
+            await ctx.send(embed=discord.Embed(description="Song skipped"))
             ctx.voice_client.stop()
     
     # pause the current song
     @commands.command()       
     async def pause(self, ctx):
         server_id = ctx.message.guild.id
-        self.message_embed[server_id] = discord.Embed()
         if (self.server_status.get(server_id) == None or self.server_status[server_id]["is_playing"] == False):
-            self.message_embed[server_id].description = "No song is playing now"    
+            message = "No song is playing now"    
         elif (ctx.voice_client.is_paused() == True):
-            self.message_embed[server_id].description = "Song is already paused"
+            message = "Song is already paused"
         else:
             ctx.voice_client.pause()
-            self.message_embed[server_id].description = "Song paused"
-        await ctx.send(embed=self.message_embed[server_id])
+            message = "Song paused"
+        await ctx.send(embed=discord.Embed(description=message))
     
     # resume the current song
     @commands.command()                                         
     async def resume(self, ctx):
         server_id = ctx.message.guild.id
-        self.message_embed[server_id] = discord.Embed()
         if (self.server_status.get(server_id) == None or self.server_status[server_id]["is_playing"] == False):
-            self.message_embed[server_id].description = "No song is playing now"
+            message = "No song is playing now"
         elif (ctx.voice_client.is_paused() == False):
-            self.message_embed[server_id].description = "Song is already playing"
+            message = "Song is already playing"
         else:
             ctx.voice_client.resume()
-            self.message_embed[server_id].description = "Song resumed"
-        await ctx.send(embed=self.message_embed[server_id])
+            message = "Song resumed"
+        await ctx.send(embed=discord.Embed(description=message))
     
     # loop the current playing song
     @commands.command()                                             
     async def loop(self, ctx):
         server_id = ctx.message.guild.id
-        self.message_embed[server_id] = discord.Embed()
         if (self.server_status[server_id]["is_looping"] == False):
-            self.message_embed[server_id].description = "Loop is enabled"
+            message = "Loop is enabled"
         else:
-            self.message_embed[server_id].description = "Loop is disabled"
+            message = "Loop is disabled"
         self.server_status[server_id]["is_looping"] = not(self.server_status[server_id]["is_looping"])
-        await ctx.send(embed=self.message_embed[server_id])
+        await ctx.send(embed=discord.Embed(description=message))
     
     # disconnect the bot
     @commands.command()                                             
@@ -299,21 +292,17 @@ class music_cog(commands.Cog):
     # warning: this function will expose your ip address, only use it in trusted servers
     # generate a downloadable audio file source
     @commands.command()
-    async def download(self, ctx, *args):
-        server_id = ctx.message.guild.id                                                           
+    async def download(self, ctx, *args):                                                         
         query = " ".join(args)
         info = self.search_yt(query)
-        self.message_embed[server_id] = discord.Embed()
-        self.message_embed[server_id].description = f"Song: {info['title']}. [Click me to download]({info['source']})\nType !downloadhelp to check how to download the song."
-        await ctx.send(embed=self.message_embed[server_id])
+        message = f"Song: {info['title']}. [Click me to download]({info['source']})\nType !downloadhelp to check how to download the song."
+        await ctx.send(embed=discord.Embed(description=message))
 
     # guide to download the audio file using the 'download' command
     @commands.command()
     async def downloadhelp(self, ctx):
-        server_id = ctx.message.guild.id
-        self.message_embed[server_id] = discord.Embed()
-        self.message_embed[server_id].description = "Steps to download audio:\nStep 1: Type !download <song> to generate a hyperlink\nStep 2: Click the hyperlink and open the audio source in browser\nStep 3: Press Ctrl+S\nStep 4: Change the file extension to .mp3 and the file type to \"All Files\"\nStep 5: Click Save"
-        await ctx.send(embed=self.message_embed[server_id])
+        message = "Steps to download audio:\nStep 1: Type !download <song> to generate a hyperlink\nStep 2: Click the hyperlink and open the audio source in browser\nStep 3: Press Ctrl+S\nStep 4: Change the file extension to .mp3 and the file type to \"All Files\"\nStep 5: Click Save"
+        await ctx.send(embed=discord.Embed(description=message))
 
 async def setup(bot):
     await bot.add_cog(music_cog(bot))
