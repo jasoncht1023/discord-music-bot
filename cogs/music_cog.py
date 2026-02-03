@@ -17,12 +17,11 @@ class music_cog(commands.Cog):
             "youtube_include_dash_manifest": False, 
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android_sdkless", "web_safari", "web"],
+                    "player_client": ["android_vr", "web_safari", "web"],
                     "skip": ["dash", "hls"],
                     "formats": "missing_pot"
                 }
             },
-            "cookies": "/yt_cookie.txt",
             "noplaylist": False,
             "default_search": "auto",
             "skip_download": True
